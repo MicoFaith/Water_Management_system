@@ -20,7 +20,7 @@ public interface TariffRepository extends JpaRepository<Tariff, Long> {
 			AND (t.effectiveTo IS NULL OR t.effectiveTo >= :billingDate)
 			ORDER BY t.version DESC
 			""")
-	Optional<Tariff> findActiveTariffForDate(
+	List<Tariff> findActiveTariffsForDate(
 			@Param("meterType") MeterType meterType, @Param("billingDate") LocalDate billingDate);
 
 	List<Tariff> findByMeterTypeOrderByVersionDesc(MeterType meterType);

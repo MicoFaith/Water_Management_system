@@ -5,8 +5,9 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import national_exam.Java.dto.auth.AuthResponse;
 import national_exam.Java.dto.auth.LoginRequest;
-import national_exam.Java.dto.auth.SignupRequest;
-import national_exam.Java.dto.user.AdminUserRequest;
+import national_exam.Java.dto.auth.OtpResponse;
+import national_exam.Java.dto.auth.RegisterRequest;
+import national_exam.Java.dto.auth.VerifyOtpRequest;
 import national_exam.Java.entity.Customer;
 import national_exam.Java.entity.Role;
 import national_exam.Java.entity.User;
@@ -18,9 +19,12 @@ import national_exam.Java.repository.RoleRepository;
 import national_exam.Java.repository.UserRepository;
 import national_exam.Java.security.JwtService;
 import national_exam.Java.security.UserPrincipal;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,14 +39,17 @@ public class AuthService {
 	private final PasswordEncoder passwordEncoder;
 	private final AuthenticationManager authenticationManager;
 	private final JwtService jwtService;
+	private final OtpService otpService;
 
 	@Transactional
-	public AuthResponse signup(SignupRequest request) {
+	public AuthResponse register(RegisterRequest request) {
 		if (userRepository.existsByEmail(request.getEmail())) {
 			throw new BusinessException("Email already registered");
 		}
 
-		RoleName roleName = RoleName.ROLE_CUSTOMER;
+		RoleName roleName = resolveRegistrationRole(request);
+		String fullNames = request.getFirstName().trim() + " " + request.getLastName().trim();
+
 		Role role =
 				roleRepository
 						.findByName(roleName)
@@ -50,14 +57,14 @@ public class AuthService {
 
 		User user =
 				User.builder()
-						.fullNames(request.getFullNames())
+						.fullNames(fullNames)
 						.email(request.getEmail())
 						.phoneNumber(request.getPhoneNumber())
 						.password(passwordEncoder.encode(request.getPassword()))
 						.status(AccountStatus.ACTIVE)
 						.build();
 		user.getRoles().add(role);
-		userRepository.save(user);
+		userRepository.saveAndFlush(user);
 
 		if (roleName == RoleName.ROLE_CUSTOMER) {
 			if (request.getNationalId() == null || request.getAddress() == null) {
@@ -68,7 +75,7 @@ public class AuthService {
 			}
 			Customer customer =
 					Customer.builder()
-							.fullNames(request.getFullNames())
+							.fullNames(fullNames)
 							.nationalId(request.getNationalId())
 							.email(request.getEmail())
 							.phoneNumber(request.getPhoneNumber())
@@ -83,63 +90,82 @@ public class AuthService {
 		return buildAuthResponse(user, token);
 	}
 
-	public AuthResponse login(LoginRequest request) {
-		Authentication authentication =
-				authenticationManager.authenticate(
-						new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
-
-		UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+	public OtpResponse login(LoginRequest request) {
 		User user =
 				userRepository
-						.findByEmail(principal.getEmail())
-						.orElseThrow(() -> new BusinessException("User not found"));
+						.findByEmail(request.getEmail())
+						.orElseThrow(() -> new BusinessException("Invalid email or password"));
 
-		String token = jwtService.generateToken(principal);
-		return buildAuthResponse(user, token);
+		if (user.getStatus() != AccountStatus.ACTIVE) {
+			throw new BusinessException("Account is disabled");
+		}
+
+		authenticationManager.authenticate(
+				new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+
+		otpService.generateAndSendOtp(request.getEmail());
+
+		return OtpResponse.builder()
+				.message("OTP sent successfully")
+				.email(request.getEmail())
+				.build();
 	}
 
-	@Transactional
-	public AuthResponse registerStaff(AdminUserRequest request) {
-		if (userRepository.existsByEmail(request.getEmail())) {
-			throw new BusinessException("Email already registered");
-		}
-
-		RoleName roleName = resolveRole(request.getRole());
-		if (roleName == RoleName.ROLE_CUSTOMER) {
-			throw new BusinessException("Use /api/auth/signup to register customers");
-		}
-
-		Role role =
-				roleRepository
-						.findByName(roleName)
-						.orElseThrow(() -> new BusinessException("Role not found: " + roleName));
-
+	public AuthResponse verifyOtp(VerifyOtpRequest request) {
 		User user =
-				User.builder()
-						.fullNames(request.getFullNames())
-						.email(request.getEmail())
-						.phoneNumber(request.getPhoneNumber())
-						.password(passwordEncoder.encode(request.getPassword()))
-						.status(
-								request.getStatus() != null
-										? request.getStatus()
-										: AccountStatus.ACTIVE)
-						.build();
-		user.getRoles().add(role);
-		userRepository.saveAndFlush(user);
+				userRepository
+						.findByEmail(request.getEmail())
+						.orElseThrow(() -> new BusinessException("User not found"));
+
+		if (user.getStatus() != AccountStatus.ACTIVE) {
+			throw new BusinessException("Account is disabled");
+		}
+
+		otpService.verifyOtp(request.getEmail(), request.getOtp());
 
 		String token = jwtService.generateToken(UserPrincipal.create(user));
 		return buildAuthResponse(user, token);
 	}
 
-	private RoleName resolveRole(String role) {
-		if (role == null || role.isBlank()) {
+	private RoleName resolveRegistrationRole(RegisterRequest request) {
+		boolean isAdmin = currentUserHasRole("ROLE_ADMIN");
+
+		if (request.getRole() == null || request.getRole().isBlank()) {
 			return RoleName.ROLE_CUSTOMER;
 		}
+
+		RoleName requested = resolveRole(request.getRole());
+
+		if (requested == RoleName.ROLE_CUSTOMER) {
+			return RoleName.ROLE_CUSTOMER;
+		}
+
+		if (!isAdmin) {
+			throw new AccessDeniedException("Public users cannot register staff roles");
+		}
+
+		return requested;
+	}
+
+	private boolean currentUserHasRole(String role) {
+		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		if (auth == null || !auth.isAuthenticated()) {
+			return false;
+		}
+		return auth.getAuthorities().stream()
+				.map(GrantedAuthority::getAuthority)
+				.anyMatch(role::equals);
+	}
+
+	private RoleName resolveRole(String role) {
+		String normalized = role.toUpperCase();
+		if (!normalized.startsWith("ROLE_")) {
+			normalized = "ROLE_" + normalized;
+		}
 		try {
-			return RoleName.valueOf(role.toUpperCase());
+			return RoleName.valueOf(normalized);
 		} catch (IllegalArgumentException ex) {
-			throw new BusinessException("Invalid role: " + role);
+			throw new BusinessException("Invalid role. Allowed: ADMIN, OPERATOR, FINANCE, CUSTOMER");
 		}
 	}
 

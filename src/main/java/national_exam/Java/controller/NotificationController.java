@@ -7,6 +7,7 @@ import national_exam.Java.service.NotificationService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,5 +28,11 @@ public class NotificationController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE', 'CUSTOMER')")
 	public List<NotificationResponse> getByCustomer(@PathVariable Long customerId) {
 		return notificationService.getByCustomer(customerId);
+	}
+
+	@PutMapping("/{id}/read")
+	@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE', 'CUSTOMER')")
+	public NotificationResponse markAsRead(@PathVariable Long id) {
+		return notificationService.markAsRead(id);
 	}
 }

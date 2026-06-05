@@ -24,10 +24,16 @@ public class PaymentController {
 	private final PaymentService paymentService;
 
 	@PostMapping
-	@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE')")
+	@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE', 'CUSTOMER')")
 	@ResponseStatus(HttpStatus.CREATED)
 	public PaymentResponse record(@Valid @RequestBody PaymentRequest request) {
 		return paymentService.recordPayment(request);
+	}
+
+	@GetMapping
+	@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE')")
+	public List<PaymentResponse> getAll() {
+		return paymentService.getAllPayments();
 	}
 
 	@GetMapping("/bill/{billId}")

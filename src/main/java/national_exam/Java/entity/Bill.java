@@ -10,6 +10,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
@@ -41,6 +42,17 @@ public class Bill {
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "customer_id", nullable = false)
 	private Customer customer;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "meter_id")
+	private Meter meter;
+
+	@OneToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "reading_id")
+	private MeterReading reading;
+
+	@Column(nullable = false, precision = 12, scale = 2)
+	private BigDecimal consumption;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 20)

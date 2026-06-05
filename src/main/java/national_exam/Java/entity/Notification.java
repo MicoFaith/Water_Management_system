@@ -49,4 +49,8 @@ public class Notification {
 
 	@Column(nullable = false)
 	private LocalDateTime createdAt;
+
+	@Column(name = "is_read", nullable = false)
+	@Builder.Default
+	private boolean read = false;
 }

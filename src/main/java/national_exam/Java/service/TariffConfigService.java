@@ -1,7 +1,10 @@
 package national_exam.Java.service;
 
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import national_exam.Java.enums.MeterType;
+import national_exam.Java.exception.ResourceNotFoundException;
 import national_exam.Java.dto.tariff.PenaltyRequest;
 import national_exam.Java.dto.tariff.ServiceChargeRequest;
 import national_exam.Java.dto.tariff.TariffRequest;
@@ -128,6 +131,24 @@ public class TariffConfigService {
 						.build();
 
 		return penaltyRepository.save(penalty);
+	}
+
+	public Tariff getActiveTariff(MeterType meterType) {
+		return tariffRepository.findActiveTariffsForDate(meterType, LocalDate.now()).stream()
+				.findFirst()
+				.orElseThrow(() -> new BusinessException("No active tariff for " + meterType));
+	}
+
+	@Transactional
+	public Tariff updateTariff(Long id, TariffRequest request) {
+		Tariff existing =
+				tariffRepository
+						.findById(id)
+						.orElseThrow(() -> new ResourceNotFoundException("Tariff not found with id: " + id));
+		existing.setActive(false);
+		existing.setEffectiveTo(LocalDate.now().minusDays(1));
+		tariffRepository.save(existing);
+		return createTariff(request);
 	}
 
 	public List<Tariff> getAllTariffs() {

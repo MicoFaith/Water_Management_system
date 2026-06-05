@@ -22,6 +22,7 @@ import national_exam.Java.entity.Tax;
 import national_exam.Java.enums.AccountStatus;
 import national_exam.Java.enums.BillStatus;
 import national_exam.Java.enums.MeterType;
+import national_exam.Java.enums.NotificationType;
 import national_exam.Java.exception.BusinessException;
 import national_exam.Java.exception.ResourceNotFoundException;
 import national_exam.Java.repository.BillRepository;
@@ -46,6 +47,45 @@ public class BillService {
 	private final ServiceChargeRepository serviceChargeRepository;
 	private final TaxRepository taxRepository;
 	private final PenaltyRepository penaltyRepository;
+	private final NotificationService notificationService;
+	private final EmailService emailService;
+
+	@Transactional
+	public BillResponse generateBillFromReading(Long readingId) {
+		MeterReading reading =
+				meterReadingRepository
+						.findById(readingId)
+						.orElseThrow(
+								() -> new ResourceNotFoundException("Meter reading not found with id: " + readingId));
+		Meter meter = reading.getMeter();
+		Customer customer = meter.getCustomer();
+
+		if (customer.getStatus() != AccountStatus.ACTIVE) {
+			throw new BusinessException("Inactive customers cannot receive bills");
+		}
+
+		if (billRepository
+				.findByMeterIdAndBillingMonthAndBillingYear(
+						meter.getId(), reading.getBillingMonth(), reading.getBillingYear())
+				.isPresent()) {
+			throw new BusinessException("Bill already exists for this meter and billing period");
+		}
+
+		BigDecimal consumption =
+				reading.getCurrentReading().subtract(reading.getPreviousReading());
+		if (consumption.signum() <= 0) {
+			throw new BusinessException("Consumption must be greater than zero");
+		}
+
+		return saveBill(
+				customer,
+				meter,
+				reading,
+				meter.getMeterType(),
+				reading.getBillingMonth(),
+				reading.getBillingYear(),
+				consumption);
+	}
 
 	@Transactional
 	public BillResponse generateBill(BillGenerationRequest request) {
@@ -55,110 +95,40 @@ public class BillService {
 			throw new BusinessException("Inactive customers cannot receive bills");
 		}
 
-		if (billRepository
-				.findByCustomerIdAndMeterTypeAndBillingMonthAndBillingYear(
-						customer.getId(),
-						request.getMeterType(),
-						request.getBillingMonth(),
-						request.getBillingYear())
-				.isPresent()) {
-			throw new BusinessException("Bill already exists for this period and meter type");
-		}
-
 		List<Meter> meters =
 				meterRepository.findByCustomerIdAndMeterType(customer.getId(), request.getMeterType());
 		if (meters.isEmpty()) {
 			throw new BusinessException("Customer has no " + request.getMeterType() + " meter");
 		}
 
-		BigDecimal totalConsumption = BigDecimal.ZERO;
-		for (Meter meter : meters) {
-			MeterReading reading =
-					meterReadingRepository
-							.findByMeterIdAndBillingMonthAndBillingYear(
-									meter.getId(), request.getBillingMonth(), request.getBillingYear())
-							.orElseThrow(
-									() ->
-											new BusinessException(
-													"Missing reading for meter "
-															+ meter.getMeterNumber()
-															+ " in "
-															+ request.getBillingMonth()
-															+ "/"
-															+ request.getBillingYear()));
-			totalConsumption =
-					totalConsumption.add(reading.getCurrentReading().subtract(reading.getPreviousReading()));
-		}
+		Meter meter = meters.getFirst();
+		MeterReading reading =
+				meterReadingRepository
+						.findByMeterIdAndBillingMonthAndBillingYear(
+								meter.getId(), request.getBillingMonth(), request.getBillingYear())
+						.orElseThrow(() -> new BusinessException("Meter reading not found for billing period"));
 
-		LocalDate billingDate =
-				YearMonth.of(request.getBillingYear(), request.getBillingMonth()).atEndOfMonth();
-
-		Tariff tariff =
-				tariffRepository
-						.findActiveTariffForDate(request.getMeterType(), billingDate)
-						.orElseThrow(() -> new BusinessException("No active tariff configured"));
-
-		ServiceCharge serviceCharge =
-				serviceChargeRepository
-						.findActiveForDate(request.getMeterType(), billingDate)
-						.orElseThrow(() -> new BusinessException("No active service charge configured"));
-
-		Tax tax =
-				taxRepository
-						.findActiveForDate(billingDate)
-						.orElseThrow(() -> new BusinessException("No active tax configured"));
-
-		BigDecimal consumptionAmount = calculateConsumptionAmount(tariff, totalConsumption);
-		BigDecimal serviceChargeAmount = serviceCharge.getAmount();
-		BigDecimal subtotal = consumptionAmount.add(serviceChargeAmount);
-		BigDecimal taxAmount =
-				subtotal.multiply(tax.getPercentage()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-
-		BigDecimal penaltyAmount = BigDecimal.ZERO;
-		LocalDate dueDate = billingDate.plusDays(30);
-		if (LocalDate.now().isAfter(dueDate)) {
-			Penalty penalty = penaltyRepository.findActiveForDate(billingDate).orElse(null);
-			if (penalty != null
-					&& LocalDate.now().isAfter(dueDate.plusDays(penalty.getDaysAfterDue()))) {
-				penaltyAmount =
-						subtotal
-								.add(taxAmount)
-								.multiply(penalty.getPercentage())
-								.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-			}
-		}
-
-		BigDecimal totalAmount = subtotal.add(taxAmount).add(penaltyAmount);
-
-		Bill bill =
-				Bill.builder()
-						.customer(customer)
-						.meterType(request.getMeterType())
-						.billingMonth(request.getBillingMonth())
-						.billingYear(request.getBillingYear())
-						.consumptionAmount(consumptionAmount)
-						.serviceChargeAmount(serviceChargeAmount)
-						.taxAmount(taxAmount)
-						.penaltyAmount(penaltyAmount)
-						.totalAmount(totalAmount)
-						.amountPaid(BigDecimal.ZERO)
-						.outstandingBalance(totalAmount)
-						.status(BillStatus.PENDING_APPROVAL)
-						.dueDate(dueDate)
-						.generatedDate(LocalDate.now())
-						.build();
-
-		return toResponse(billRepository.save(bill));
+		return generateBillFromReading(reading.getId());
 	}
 
 	@Transactional
 	public BillResponse approveBill(Long billId) {
 		Bill bill = findBill(billId);
-		if (bill.getStatus() != BillStatus.PENDING_APPROVAL) {
+		if (bill.getStatus() != BillStatus.PENDING) {
 			throw new BusinessException("Only pending bills can be approved");
 		}
+		if (bill.getStatus() == BillStatus.APPROVED) {
+			throw new BusinessException("Bill is already approved");
+		}
+
 		bill.setStatus(BillStatus.APPROVED);
-		return toResponse(billRepository.save(bill));
+		Bill saved = billRepository.save(bill);
+
+		notificationService.createBillNotification(
+				saved.getCustomer(), saved, NotificationType.BILL_GENERATED, false);
+		emailService.sendBillApprovalEmail(saved.getCustomer(), saved);
+
+		return toResponse(saved);
 	}
 
 	public List<BillResponse> getAllBills() {
@@ -167,18 +137,113 @@ public class BillService {
 
 	public List<BillResponse> getBillsByCustomer(Long customerId) {
 		return billRepository.findByCustomerId(customerId).stream()
-				.map(this::toResponse)
+				.map(b -> toResponse(applyPenaltyIfOverdue(b)))
 				.collect(Collectors.toList());
 	}
 
 	public BillResponse getBillById(Long id) {
-		return toResponse(findBill(id));
+		return toResponse(applyPenaltyIfOverdue(findBill(id)));
 	}
 
 	public Bill findBill(Long id) {
 		return billRepository
 				.findById(id)
 				.orElseThrow(() -> new ResourceNotFoundException("Bill not found with id: " + id));
+	}
+
+	@Transactional
+	public Bill applyPenaltyIfOverdue(Bill bill) {
+		if (bill.getStatus() != BillStatus.APPROVED && bill.getStatus() != BillStatus.PARTIALLY_PAID) {
+			return bill;
+		}
+		if (!LocalDate.now().isAfter(bill.getDueDate())) {
+			return bill;
+		}
+		if (bill.getPenaltyAmount().signum() > 0) {
+			return bill;
+		}
+
+		LocalDate billingDate = YearMonth.of(bill.getBillingYear(), bill.getBillingMonth()).atEndOfMonth();
+		Penalty penalty =
+				penaltyRepository.findActiveForDate(billingDate).stream().findFirst().orElse(null);
+		if (penalty == null) {
+			return bill;
+		}
+
+		BigDecimal subtotal = bill.getConsumptionAmount().add(bill.getServiceChargeAmount());
+		BigDecimal penaltyAmount =
+				subtotal
+						.add(bill.getTaxAmount())
+						.multiply(penalty.getPercentage())
+						.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+		bill.setPenaltyAmount(penaltyAmount);
+		bill.setTotalAmount(subtotal.add(bill.getTaxAmount()).add(penaltyAmount));
+		bill.setOutstandingBalance(bill.getTotalAmount().subtract(bill.getAmountPaid()));
+		bill.setStatus(BillStatus.OVERDUE);
+		return billRepository.save(bill);
+	}
+
+	private BillResponse saveBill(
+			Customer customer,
+			Meter meter,
+			MeterReading reading,
+			MeterType meterType,
+			Integer billingMonth,
+			Integer billingYear,
+			BigDecimal consumption) {
+
+		LocalDate billingDate = YearMonth.of(billingYear, billingMonth).atEndOfMonth();
+
+		Tariff tariff =
+				tariffRepository.findActiveTariffsForDate(meterType, billingDate).stream()
+						.findFirst()
+						.orElseThrow(() -> new BusinessException("No active tariff configured"));
+
+		ServiceCharge serviceCharge =
+				serviceChargeRepository.findActiveForDate(meterType, billingDate).stream()
+						.findFirst()
+						.orElseThrow(() -> new BusinessException("No active service charge configured"));
+
+		Tax tax =
+				taxRepository.findActiveForDate(billingDate).stream()
+						.findFirst()
+						.orElseThrow(() -> new BusinessException("No active tax configured"));
+
+		BigDecimal consumptionAmount = calculateConsumptionAmount(tariff, consumption);
+		BigDecimal serviceChargeAmount = serviceCharge.getAmount();
+		BigDecimal subtotal = consumptionAmount.add(serviceChargeAmount);
+		BigDecimal taxAmount =
+				subtotal.multiply(tax.getPercentage()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+		BigDecimal totalAmount = subtotal.add(taxAmount);
+		LocalDate dueDate = billingDate.plusDays(30);
+
+		Bill bill =
+				Bill.builder()
+						.customer(customer)
+						.meter(meter)
+						.reading(reading)
+						.meterType(meterType)
+						.billingMonth(billingMonth)
+						.billingYear(billingYear)
+						.consumption(consumption)
+						.consumptionAmount(consumptionAmount)
+						.serviceChargeAmount(serviceChargeAmount)
+						.taxAmount(taxAmount)
+						.penaltyAmount(BigDecimal.ZERO)
+						.totalAmount(totalAmount)
+						.amountPaid(BigDecimal.ZERO)
+						.outstandingBalance(totalAmount)
+						.status(BillStatus.PENDING)
+						.dueDate(dueDate)
+						.generatedDate(LocalDate.now())
+						.build();
+
+		Bill saved = billRepository.save(bill);
+		notificationService.createBillNotification(
+				customer, saved, NotificationType.BILL_GENERATED, true);
+		emailService.sendBillGeneratedEmail(customer, saved);
+		return toResponse(saved);
 	}
 
 	private BigDecimal calculateConsumptionAmount(Tariff tariff, BigDecimal consumption) {
@@ -221,6 +286,7 @@ public class BillService {
 				.meterType(bill.getMeterType())
 				.billingMonth(bill.getBillingMonth())
 				.billingYear(bill.getBillingYear())
+				.consumption(bill.getConsumption())
 				.consumptionAmount(bill.getConsumptionAmount())
 				.serviceChargeAmount(bill.getServiceChargeAmount())
 				.taxAmount(bill.getTaxAmount())

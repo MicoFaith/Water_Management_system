@@ -41,7 +41,7 @@ DECLARE
     v_period TEXT;
     v_message TEXT;
 BEGIN
-    SELECT COALESCE(SUM(amount_paid), 0), b.total_amount, b.customer_id, b.billing_month, b.billing_year
+    SELECT COALESCE(SUM(p.amount_paid), 0), b.total_amount, b.customer_id, b.billing_month, b.billing_year
     INTO v_total_paid, v_bill_total, v_customer_id, v_billing_month, v_billing_year
     FROM payments p
     JOIN bills b ON b.id = p.bill_id

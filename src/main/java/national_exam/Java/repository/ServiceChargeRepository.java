@@ -1,7 +1,7 @@
 package national_exam.Java.repository;
 
 import java.time.LocalDate;
-import java.util.Optional;
+import java.util.List;
 import national_exam.Java.entity.ServiceCharge;
 import national_exam.Java.enums.MeterType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -19,6 +19,6 @@ public interface ServiceChargeRepository extends JpaRepository<ServiceCharge, Lo
 			AND (s.effectiveTo IS NULL OR s.effectiveTo >= :billingDate)
 			ORDER BY s.version DESC
 			""")
-	Optional<ServiceCharge> findActiveForDate(
+	List<ServiceCharge> findActiveForDate(
 			@Param("meterType") MeterType meterType, @Param("billingDate") LocalDate billingDate);
 }

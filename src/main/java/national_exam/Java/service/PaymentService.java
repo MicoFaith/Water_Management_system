@@ -22,6 +22,7 @@ public class PaymentService {
 	private final PaymentRepository paymentRepository;
 	private final BillRepository billRepository;
 	private final BillService billService;
+	private final EmailService emailService;
 
 	@Transactional
 	public PaymentResponse recordPayment(PaymentRequest request) {
@@ -31,7 +32,9 @@ public class PaymentService {
 			throw new BusinessException("Bill is already fully paid");
 		}
 
-		if (bill.getStatus() == BillStatus.PENDING_APPROVAL) {
+		bill = billService.applyPenaltyIfOverdue(bill);
+
+		if (bill.getStatus() == BillStatus.PENDING) {
 			throw new BusinessException("Bill must be approved before payment");
 		}
 
@@ -61,6 +64,13 @@ public class PaymentService {
 		}
 		billRepository.save(bill);
 
+		if (bill.getStatus() == BillStatus.PAID) {
+			emailService.sendFullPaymentEmail(bill.getCustomer(), bill);
+		} else {
+			emailService.sendPartialPaymentEmail(
+					bill.getCustomer(), bill, request.getAmountPaid());
+		}
+
 		return PaymentResponse.builder()
 				.id(payment.getId())
 				.billId(bill.getId())
@@ -74,6 +84,12 @@ public class PaymentService {
 
 	public List<PaymentResponse> getPaymentsByBill(Long billId) {
 		return paymentRepository.findByBillId(billId).stream()
+				.map(this::toResponse)
+				.collect(Collectors.toList());
+	}
+
+	public List<PaymentResponse> getAllPayments() {
+		return paymentRepository.findAll().stream()
 				.map(this::toResponse)
 				.collect(Collectors.toList());
 	}

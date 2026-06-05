@@ -4,7 +4,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import national_exam.Java.dto.auth.AuthResponse;
 import national_exam.Java.dto.auth.LoginRequest;
-import national_exam.Java.dto.auth.SignupRequest;
+import national_exam.Java.dto.auth.OtpResponse;
+import national_exam.Java.dto.auth.RegisterRequest;
+import national_exam.Java.dto.auth.VerifyOtpRequest;
 import national_exam.Java.service.AuthService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,14 +22,19 @@ public class AuthController {
 
 	private final AuthService authService;
 
-	@PostMapping("/signup")
+	@PostMapping("/register")
 	@ResponseStatus(HttpStatus.CREATED)
-	public AuthResponse signup(@Valid @RequestBody SignupRequest request) {
-		return authService.signup(request);
+	public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
+		return authService.register(request);
 	}
 
 	@PostMapping("/login")
-	public AuthResponse login(@Valid @RequestBody LoginRequest request) {
+	public OtpResponse login(@Valid @RequestBody LoginRequest request) {
 		return authService.login(request);
+	}
+
+	@PostMapping("/verify-otp")
+	public AuthResponse verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+		return authService.verifyOtp(request);
 	}
 }

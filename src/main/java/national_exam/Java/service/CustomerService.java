@@ -5,11 +5,19 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import national_exam.Java.dto.customer.CustomerRequest;
 import national_exam.Java.dto.customer.CustomerResponse;
+import national_exam.Java.entity.Bill;
 import national_exam.Java.entity.Customer;
+import national_exam.Java.entity.Meter;
+import national_exam.Java.entity.MeterReading;
 import national_exam.Java.enums.AccountStatus;
 import national_exam.Java.exception.BusinessException;
 import national_exam.Java.exception.ResourceNotFoundException;
+import national_exam.Java.repository.BillRepository;
 import national_exam.Java.repository.CustomerRepository;
+import national_exam.Java.repository.MeterReadingRepository;
+import national_exam.Java.repository.MeterRepository;
+import national_exam.Java.repository.NotificationRepository;
+import national_exam.Java.repository.PaymentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class CustomerService {
 
 	private final CustomerRepository customerRepository;
+	private final MeterRepository meterRepository;
+	private final MeterReadingRepository meterReadingRepository;
+	private final BillRepository billRepository;
+	private final PaymentRepository paymentRepository;
+	private final NotificationRepository notificationRepository;
 
 	@Transactional
 	public CustomerResponse create(CustomerRequest request) {
@@ -68,6 +81,26 @@ public class CustomerService {
 		}
 
 		return toResponse(customerRepository.save(customer));
+	}
+
+	@Transactional
+	public void delete(Long id) {
+		Customer customer = findCustomer(id);
+
+		List<Bill> bills = billRepository.findByCustomerId(id);
+		for (Bill bill : bills) {
+			paymentRepository.deleteAll(paymentRepository.findByBillId(bill.getId()));
+		}
+		notificationRepository.deleteAll(notificationRepository.findByCustomerIdOrderByCreatedAtDesc(id));
+		billRepository.deleteAll(bills);
+
+		List<Meter> meters = meterRepository.findByCustomerId(id);
+		for (Meter meter : meters) {
+			List<MeterReading> readings = meterReadingRepository.findByMeterId(meter.getId());
+			meterReadingRepository.deleteAll(readings);
+		}
+		meterRepository.deleteAll(meters);
+		customerRepository.delete(customer);
 	}
 
 	public Customer findCustomer(Long id) {

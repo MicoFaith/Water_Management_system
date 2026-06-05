@@ -1,7 +1,7 @@
 package national_exam.Java.repository;
 
 import java.time.LocalDate;
-import java.util.Optional;
+import java.util.List;
 import national_exam.Java.entity.Penalty;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -17,5 +17,5 @@ public interface PenaltyRepository extends JpaRepository<Penalty, Long> {
 			AND (p.effectiveTo IS NULL OR p.effectiveTo >= :billingDate)
 			ORDER BY p.version DESC
 			""")
-	Optional<Penalty> findActiveForDate(@Param("billingDate") LocalDate billingDate);
+	List<Penalty> findActiveForDate(@Param("billingDate") LocalDate billingDate);
 }

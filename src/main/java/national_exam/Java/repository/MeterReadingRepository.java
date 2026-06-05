@@ -14,4 +14,6 @@ public interface MeterReadingRepository extends JpaRepository<MeterReading, Long
 
 	List<MeterReading> findByMeterCustomerIdAndBillingMonthAndBillingYear(
 			Long customerId, Integer month, Integer year);
+
+	List<MeterReading> findByMeterId(Long meterId);
 }

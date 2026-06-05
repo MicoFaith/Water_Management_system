@@ -17,6 +17,7 @@ public class BillResponse {
 	private MeterType meterType;
 	private Integer billingMonth;
 	private Integer billingYear;
+	private BigDecimal consumption;
 	private BigDecimal consumptionAmount;
 	private BigDecimal serviceChargeAmount;
 	private BigDecimal taxAmount;

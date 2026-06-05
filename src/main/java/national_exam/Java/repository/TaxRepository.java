@@ -1,7 +1,7 @@
 package national_exam.Java.repository;
 
 import java.time.LocalDate;
-import java.util.Optional;
+import java.util.List;
 import national_exam.Java.entity.Tax;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -17,5 +17,5 @@ public interface TaxRepository extends JpaRepository<Tax, Long> {
 			AND (t.effectiveTo IS NULL OR t.effectiveTo >= :billingDate)
 			ORDER BY t.version DESC
 			""")
-	Optional<Tax> findActiveForDate(@Param("billingDate") LocalDate billingDate);
+	List<Tax> findActiveForDate(@Param("billingDate") LocalDate billingDate);
 }

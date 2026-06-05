@@ -15,4 +15,7 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
 
 	Optional<Bill> findByCustomerIdAndMeterTypeAndBillingMonthAndBillingYear(
 			Long customerId, MeterType meterType, Integer month, Integer year);
+
+	Optional<Bill> findByMeterIdAndBillingMonthAndBillingYear(
+			Long meterId, Integer month, Integer year);
 }

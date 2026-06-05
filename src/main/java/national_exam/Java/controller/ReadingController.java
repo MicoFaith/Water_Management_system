@@ -17,9 +17,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/meter-readings")
+@RequestMapping("/api/readings")
 @RequiredArgsConstructor
-public class MeterReadingController {
+public class ReadingController {
 
 	private final MeterReadingService meterReadingService;
 
@@ -34,6 +34,12 @@ public class MeterReadingController {
 	@PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'FINANCE')")
 	public List<MeterReadingResponse> getAll() {
 		return meterReadingService.getAll();
+	}
+
+	@GetMapping("/meter/{meterId}")
+	@PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'FINANCE')")
+	public List<MeterReadingResponse> getByMeter(@PathVariable Long meterId) {
+		return meterReadingService.getByMeter(meterId);
 	}
 
 	@GetMapping("/{id}")
