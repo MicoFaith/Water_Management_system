@@ -2,6 +2,7 @@ package national_exam.Java.dto.tariff;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import lombok.Data;
@@ -17,6 +18,7 @@ public class ServiceChargeRequest {
 	private MeterType meterType;
 
 	@NotNull
+	@Positive(message = "Amount must be greater than zero")
 	private BigDecimal amount;
 
 	@NotNull

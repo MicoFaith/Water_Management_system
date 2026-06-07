@@ -135,7 +135,7 @@ Record-Test "Phase 1" "Invalid email format rejected" (-not $badEmail.Ok)
 foreach ($acct in @(
     @{ Email = "faithmico4@gmail.com"; Pass = "Admin123"; Role = "Admin" },
     @{ Email = "buterafaith@gmail.com"; Pass = "Operator123"; Role = "Operator" },
-    @{ Email = "isimbihyguette@gmail.com"; Pass = "Finance123"; Role = "Finance" },
+    @{ Email = "isimbihyguette24@gmail.com"; Pass = "Finance123"; Role = "Finance" },
     @{ Email = "faithmico25@gmail.com"; Pass = "Customer123"; Role = "Customer" }
 )) {
     $login = Invoke-Api POST "/api/auth/login" @{ email = $acct.Email; password = $acct.Pass }
@@ -175,7 +175,7 @@ if (-not $newOtpTest.Ok) {
 
 # ========== PHASE 3: Authorization ==========
 $opToken = Login-WithOtp "buterafaith@gmail.com" "Operator123"
-$finToken = Login-WithOtp "isimbihyguette@gmail.com" "Finance123"
+$finToken = Login-WithOtp "isimbihyguette24@gmail.com" "Finance123"
 $custToken = Login-WithOtp "faithmico25@gmail.com" "Customer123"
 
 Record-Test "Phase 3" "Admin can manage users" (Invoke-Api GET "/api/users" $null $adminToken).Ok

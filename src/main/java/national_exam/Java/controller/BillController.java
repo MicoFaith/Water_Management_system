@@ -1,5 +1,7 @@
 package national_exam.Java.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import national_exam.Java.dto.bill.BillResponse;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/bills")
 @RequiredArgsConstructor
+@Tag(name = "Bills")
 public class BillController {
 
 	private final BillService billService;
@@ -24,30 +27,35 @@ public class BillController {
 	@PostMapping("/generate/{readingId}")
 	@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE')")
 	@ResponseStatus(HttpStatus.CREATED)
+	@Operation(summary = "Generate bill from reading — Allowed roles: ADMIN, FINANCE")
 	public BillResponse generateFromReading(@PathVariable Long readingId) {
 		return billService.generateBillFromReading(readingId);
 	}
 
 	@PutMapping("/{id}/approve")
 	@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE')")
+	@Operation(summary = "Approve bill for payment — Allowed roles: ADMIN, FINANCE")
 	public BillResponse approve(@PathVariable Long id) {
 		return billService.approveBill(id);
 	}
 
 	@GetMapping
 	@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE')")
+	@Operation(summary = "List all bills — Allowed roles: ADMIN, FINANCE")
 	public List<BillResponse> getAll() {
 		return billService.getAllBills();
 	}
 
 	@GetMapping("/{id}")
 	@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE', 'CUSTOMER')")
+	@Operation(summary = "Get bill by ID — Allowed roles: ADMIN, FINANCE, CUSTOMER")
 	public BillResponse getById(@PathVariable Long id) {
 		return billService.getBillById(id);
 	}
 
 	@GetMapping("/customer/{customerId}")
 	@PreAuthorize("hasAnyRole('ADMIN', 'FINANCE', 'CUSTOMER')")
+	@Operation(summary = "List bills for customer — Allowed roles: ADMIN, FINANCE, CUSTOMER")
 	public List<BillResponse> getByCustomer(@PathVariable Long customerId) {
 		return billService.getBillsByCustomer(customerId);
 	}

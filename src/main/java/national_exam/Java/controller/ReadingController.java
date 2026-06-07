@@ -1,5 +1,7 @@
 package national_exam.Java.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/readings")
 @RequiredArgsConstructor
+@Tag(name = "Meter Readings")
 public class ReadingController {
 
 	private final MeterReadingService meterReadingService;
@@ -26,24 +29,28 @@ public class ReadingController {
 	@PostMapping
 	@PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR')")
 	@ResponseStatus(HttpStatus.CREATED)
+	@Operation(summary = "Capture meter reading — Allowed roles: ADMIN, OPERATOR")
 	public MeterReadingResponse capture(@Valid @RequestBody MeterReadingRequest request) {
 		return meterReadingService.capture(request);
 	}
 
 	@GetMapping
 	@PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'FINANCE')")
+	@Operation(summary = "List all readings — Allowed roles: ADMIN, OPERATOR, FINANCE")
 	public List<MeterReadingResponse> getAll() {
 		return meterReadingService.getAll();
 	}
 
 	@GetMapping("/meter/{meterId}")
 	@PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'FINANCE')")
+	@Operation(summary = "List readings for meter — Allowed roles: ADMIN, OPERATOR, FINANCE")
 	public List<MeterReadingResponse> getByMeter(@PathVariable Long meterId) {
 		return meterReadingService.getByMeter(meterId);
 	}
 
 	@GetMapping("/{id}")
 	@PreAuthorize("hasAnyRole('ADMIN', 'OPERATOR', 'FINANCE')")
+	@Operation(summary = "Get reading by ID — Allowed roles: ADMIN, OPERATOR, FINANCE")
 	public MeterReadingResponse getById(@PathVariable Long id) {
 		return meterReadingService.getById(id);
 	}

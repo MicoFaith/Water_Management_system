@@ -57,7 +57,7 @@ public class DataInitializer {
 
 		seedUser(
 				"Hyguette Finance",
-				"isimbihyguette@gmail.com",
+				"isimbihyguette24@gmail.com",
 				"0780000003",
 				"Finance123",
 				RoleName.ROLE_FINANCE,
