@@ -1,0 +1,1 @@
+UPDATE bills SET status = 'PENDING' WHERE status = 'PENDING_APPROVAL';
